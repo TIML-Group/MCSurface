@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -5,11 +6,12 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 from torch.nn import Module, Parameter
 from torch.utils.data import DataLoader, Subset
-from torchvision.models import vgg16
+from torchvision.models import vgg16, resnet18
 from scipy.special import binom
 
 # Import VGGNet from vgg.py
 from vgg import VGGNet
+from resnet import ResNetNet
 
 Debug = False
 
@@ -44,9 +46,10 @@ class BezierSurface(Module):
         return B_u, B_v
 
 class SurfaceNet(Module):
-    def __init__(self, num_classes, num_bends, learning_rate, num_samples, dataset, batch_size, init_epochs, total_epochs, checkpoint_paths):
+    def __init__(self, num_classes, model_type, num_bends, learning_rate, num_samples, dataset, batch_size, init_epochs, total_epochs, checkpoint_paths):
         super(SurfaceNet, self).__init__()
         self.num_classes = num_classes
+        self.model_type = model_type
         self.num_bends = num_bends
         self.learning_rate = learning_rate
         self.num_samples = num_samples
@@ -57,7 +60,7 @@ class SurfaceNet(Module):
 
         self.bezier_surface = BezierSurface(num_bends, num_bends).to(device)
         self.theta = self.initialize_control_points(checkpoint_paths)
-        self.net = self.create_vggnet_model()  # Initialize the custom VGGNet model
+        self.net = self.create_net_model()  # Initialize the custom VGGNet model
 
         print_model_parameter_count(self.net)  # Add this line to debug
 
@@ -88,7 +91,7 @@ class SurfaceNet(Module):
         return theta
 
     def load_model_from_checkpoint(self, checkpoint_path):
-        model = self.create_vggnet_model()
+        model = self.create_net_model()
         checkpoint = torch.load(checkpoint_path, map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'], strict=True)
         model.to(device)
@@ -107,8 +110,12 @@ class SurfaceNet(Module):
             param.data.copy_(parameters[offset:offset + param_size].reshape(param.size()).to(device))
             offset += param_size
 
-    def create_vggnet_model(self):
-        return VGGNet(num_classes=self.num_classes).to(device)
+    def create_net_model(self):
+        if self.model_type == 'Vgg':
+            return VGGNet(num_classes=self.num_classes).to(device)
+        else:
+            return ResNetNet(num_classes=self.num_classes).to(device)
+            
 
     def compute_initialization_points(self, u, v):
         B_u, B_v = self.bezier_surface(u, v)
@@ -141,11 +148,14 @@ class SurfaceNet(Module):
     def create_model(self):
         # Create a model with the same architecture as the one from the checkpoints
         # model = self.architecture(weights=None)
-        model = vgg16(weights=None)
-        model.classifier[6] = torch.nn.Linear(model.classifier[6].in_features, self.num_classes)
-        return model
-        # model = self.create_vggnet_model().to(device)
-        # return model
+        if self.model_type == 'Vgg':
+            model = vgg16(weights=None)
+            model.classifier[6] = torch.nn.Linear(model.classifier[6].in_features, self.num_classes)
+            return model
+        else:
+            model = resnet18(pretrained=False)
+            model.fc = torch.nn.Linear(model.fc.in_features, self.num_classes)
+            return model
 
     def train_model(self):
         self.to(device)
@@ -334,32 +344,38 @@ class SurfaceNet(Module):
 
         return u_vals, v_vals, loss_surface, accuracy_surface
 
-# Example usage
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', choices=['Vgg', 'Resnet'], default='Vgg', help='Choose the model to use')
+    parser.add_argument('--dataset', choices=['CIFAR10', 'CIFAR100'], default='CIFAR10', help='Choose the dataset')
+    args = parser.parse_args()
+
     num_bends = 2
     learning_rate = 0.0001
     num_samples = 15
     # num_samples = 1
     batch_size = 512
-    num_classes = 10
+    num_classes = 10 if args.dataset == 'CIFAR10' else 100
+    model_type = args.model
     # init_epochs = 10
     # total_epochs = 20
     init_epochs = 6
     total_epochs = 15
 
     # Checkpoint paths
-    checkpoint_paths = [
-        './checkpoints1/vgg16_cifar10_epoch_280.pth',
-        './checkpoints2/vgg16_cifar10_epoch_280.pth',
-        './checkpoints3/vgg16_cifar10_epoch_340.pth',
-        './checkpoints4/vgg16_cifar10_epoch_280.pth'
-    ]
     # checkpoint_paths = [
-    #     './checkpoints4/vgg16_cifar10_epoch_210.pth',
-    #     './checkpoints4/vgg16_cifar10_epoch_230.pth',
-    #     './checkpoints4/vgg16_cifar10_epoch_250.pth',
+    #     './checkpoints1/vgg16_cifar10_epoch_280.pth',
+    #     './checkpoints2/vgg16_cifar10_epoch_280.pth',
+    #     './checkpoints3/vgg16_cifar10_epoch_340.pth',
     #     './checkpoints4/vgg16_cifar10_epoch_280.pth'
     # ]
+
+    checkpoint_paths = [
+        'checkpoints/Resnet_CIFAR10_run1/model_epoch_350.pth',
+        'checkpoints/Resnet_CIFAR10_run2/model_epoch_350.pth',
+        'checkpoints/Resnet_CIFAR10_run3/model_epoch_350.pth',
+        'checkpoints/Resnet_CIFAR10_run4/model_epoch_350.pth'
+    ]
 
     # Transformations for CIFAR-10 dataset
     transform = transforms.Compose([
@@ -368,11 +384,14 @@ if __name__ == "__main__":
     ])
 
     # Load CIFAR-10 dataset
-    train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+    if args.dataset == 'CIFAR10':
+        train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
+    else:
+        train_dataset = datasets.CIFAR100(root='./data', train=True, download=True, transform=transform)
 
     # for demo purpose only take first 5000
-    # train_dataset = Subset(train_dataset, range(512))
+    train_dataset = Subset(train_dataset, range(512))
 
-    surface_net = SurfaceNet(num_classes, num_bends, learning_rate, num_samples, train_dataset, batch_size, init_epochs, total_epochs, checkpoint_paths)
+    surface_net = SurfaceNet(num_classes, model_type, num_bends, learning_rate, num_samples, train_dataset, batch_size, init_epochs, total_epochs, checkpoint_paths)
     surface_net.train_model()
-    torch.save(surface_net.state_dict(), f'SurfaceNet.pth')
+    torch.save(surface_net.state_dict(), f'SurfaceNet_fake.pth')

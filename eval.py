@@ -1,3 +1,4 @@
+import argparse
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -60,6 +61,11 @@ def inspect_curves():
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', choices=['Vgg', 'Resnet'], default='Vgg', help='Choose the model to use')
+    parser.add_argument('--dataset', choices=['CIFAR10', 'CIFAR100'], default='CIFAR10', help='Choose the dataset')
+    args = parser.parse_args()
+
     num_bends = 2
     learning_rate = 0.0002
     num_samples = 5
@@ -69,25 +75,31 @@ if __name__ == "__main__":
     total_epochs = 20
 
     # Checkpoint paths
-    checkpoint_paths = [
-        './checkpoints1/vgg16_cifar10_epoch_280.pth',
-        './checkpoints2/vgg16_cifar10_epoch_280.pth',
-        './checkpoints3/vgg16_cifar10_epoch_340.pth',
-        './checkpoints4/vgg16_cifar10_epoch_280.pth'
-    ]
-
     # checkpoint_paths = [
-    #     './checkpoints4/vgg16_cifar10_epoch_210.pth',
-    #     './checkpoints4/vgg16_cifar10_epoch_230.pth',
-    #     './checkpoints4/vgg16_cifar10_epoch_250.pth',
+    #     './checkpoints1/vgg16_cifar10_epoch_280.pth',
+    #     './checkpoints2/vgg16_cifar10_epoch_280.pth',
+    #     './checkpoints3/vgg16_cifar10_epoch_340.pth',
     #     './checkpoints4/vgg16_cifar10_epoch_280.pth'
+    # ]
+
+    checkpoint_paths = [
+        'checkpoints/Resnet_CIFAR10_run1/model_epoch_360.pth',
+        'checkpoints/Resnet_CIFAR10_run2/model_epoch_360.pth',
+        'checkpoints/Resnet_CIFAR10_run3/model_epoch_360.pth',
+        'checkpoints/Resnet_CIFAR10_run4/model_epoch_360.pth'
+    ]
+    # checkpoint_paths = [
+    #     'checkpoints/Vgg_CIFAR10_run1/model_epoch_350.pth',
+    #     'checkpoints/Vgg_CIFAR10_run2/model_epoch_350.pth',
+    #     'checkpoints/Vgg_CIFAR10_run3/model_epoch_350.pth',
+    #     'checkpoints/Vgg_CIFAR10_run4/model_epoch_350.pth'
     # ]
 
     # Transformations for CIFAR-10 dataset
     transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.465, 0.406], std=[0.229, 0.224, 0.225])
-])
+    ])
 
     # Load CIFAR-10 dataset
     train_dataset = datasets.CIFAR10(root='./data', train=True, download=True, transform=transform)
@@ -98,7 +110,7 @@ if __name__ == "__main__":
     test_dataset = datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-    surface_net = SurfaceNet(num_classes, num_bends, learning_rate, num_samples, train_dataset, batch_size, init_epochs, total_epochs, checkpoint_paths)
+    surface_net = SurfaceNet(num_classes, args.model, num_bends, learning_rate, num_samples, train_dataset, batch_size, init_epochs, total_epochs, checkpoint_paths)
     # surface_net.load_state_dict(torch.load('SurfaceNet.pth'), strict=True)
 
     u_vals, v_vals, loss_surface, accuracy_surface = surface_net.evaluate_on_grid(test_loader)
