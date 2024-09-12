@@ -23,15 +23,20 @@ This project implements a method for exploring mode connectivity in the paramete
 Clone this repository to your local machine:
 
 ```bash
-git clone https://github.com/your-repository/mode-connectivity-bezier.git
+git clone https://github.com/
 cd mode-connectivity-bezier
 ```
 
 Usage
 Finding Modes
 To find different modes for the neural network, use the find_modes.py script. You can specify the model, dataset, and other parameters.
+
+Supported Models: Vgg, Resnet, Vit
+
+Supported Datasets: CIFAR10, CIFAR100, TinyImageNet
+
 ```bash
-python find_modes.py --model GCN --dataset PROTEINS --epochs 100 --lr 0.01
+python find_modes.py --model VGG --dataset PROTEINS --epochs 100 --lr 0.01
 ```
 
 support vgg, resnet, vit model working on CIFAR10/100 ImageNet dataset
@@ -40,7 +45,12 @@ support vgg, resnet, vit model working on CIFAR10/100 ImageNet dataset
 Training Bezier Surface
 To train a Bezier surface given the four control points, use the surface.py script. You must specify the control points, model, and dataset.
 ```bash
-python surface.py --model GCN --dataset PROTEINS --control-points path/to/control_points.npy
+python surfaces.py \
+    --model Vgg \
+    --dataset CIFAR10 \
+    --checkpoints path_to_checkpoint1.pth path_to_checkpoint2.pth path_to_checkpoint3.pth path_to_checkpoint4.pth \
+    --lr 0.0001 \
+    --weight_decay 0.0002
 ```
 
 Configuration
