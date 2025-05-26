@@ -1,0 +1,10 @@
+torch
+torchvision
+numpy
+scipy
+PyYAML
+matplotlib
+timm
+requests
+wandb
+gdown 
